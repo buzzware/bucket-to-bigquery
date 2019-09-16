@@ -1,25 +1,4 @@
-//const {loadAndBuild} = require('./firebuilder');
-
 const index = require('./index');
-
-//const main = loadAndBuild('main');
-//const api = loadAndBuild('api');
-//const app = loadAndBuild('app');
-
-//let port = main.get('port');
-
-//main.use('/api',api);
-//main.use('/app',app);
-// main.use(index);
-//
-// main.listen(port, function(){
-//   console.log('The server is running, ' +
-//     ' please, open your browser at http://localhost:%s',
-//     port);
-// });
-
-
-
 
 (async function() {
   try {
@@ -56,7 +35,3 @@ const index = require('./index');
     process.exit();
   }
 })();
-
-
-
-
