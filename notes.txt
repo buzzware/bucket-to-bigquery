@@ -1,0 +1,7 @@
+
+
+Deployment :
+
+* cloud function created with bucket-to-bigquery repository
+* environment variables B2BQ_MANIFEST=gs://<bucket>/<path>.json, ENTRY_POINT=loadCreatedFiles
+

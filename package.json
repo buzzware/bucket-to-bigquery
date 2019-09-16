@@ -8,5 +8,25 @@
   },
   "keywords": [],
   "author": "Gary McGhee",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/bigquery": "4.1.8",
+    "@google-cloud/storage": "3.2.1",
+    "@google-cloud/pubsub": "0.31.1",
+    "lodash": "4.17.15",
+    "fs-extra": "8.1.0",
+    "minimatch": "3.0.4",
+    "luxon": "1.17.2",
+    "error-control": "0.2.5",
+    "express": "4.17.1"
+  },
+  "devDependencies": {
+    "mocha": "6.2.0",
+    "chai": "4.2.0",
+    "chai-as-promised": "7.1.1",
+    "chai-subset": "1.6.0"
+  },
+  "engines": {
+    "node": "8"
+  }
 }
