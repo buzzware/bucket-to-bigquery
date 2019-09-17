@@ -14,18 +14,19 @@ const storage = new Storage(); //{projectId: this.project, keyFilename: this.key
  */
 exports.loadCreatedFiles = async (event, context) => {
 
+  console.log(JSON.stringify(process.env));
   console.log(JSON.stringify(event));
   console.log(JSON.stringify(context));
 
   let manifest;
-  let manifest_uri = context.env.B2BQ_MANIFEST;
+  let manifest_uri = process.env.B2BQ_MANIFEST;
   if (!manifest_uri)
-    throw new HttpErrors.NotFound('B2BQ_MANIFEST not given');
+    throw new HttpErrors.NotFoundError('B2BQ_MANIFEST not given');
   //let projectId = context.
   let manifest_content = await GetStorageToBuffer.call(storage, manifest_uri);
   manifest = manifest_content && JSON.parse(manifest_content);
   if (!manifest)
-    throw new HttpErrors.NotFound('Manifest not found');
+    throw new HttpErrors.NotFoundError('Manifest not found');
 
   let auth = manifest.authentication;
   let uri = auth.keyFilename;
@@ -54,7 +55,7 @@ exports.loadCreatedFiles = async (event, context) => {
     events = context.mockEvents;
   } else {
     await bucketToBigQuery.ensureSubscription();
-    events = await bucketToBigQuery.pullMessages();
+    events = await bucketToBigQuery.pullMessages(9000); // the more the better for deduping reasons, but we can only load 1,000 jobs of 10,000 files per job
   }
   console.log(`Got ${events.length} notifications`);
   let taskInfos = bucketToBigQuery.getTriggeredTaskInfos(events);  // gets info of the tasks that have been triggered by a changing file
@@ -69,6 +70,7 @@ exports.loadCreatedFiles = async (event, context) => {
   if (taskInfos && taskInfos.length) {
     let loadJobs = await bucketToBigQuery.loadJobsFromTaskInfos(taskInfos);
     let responses = await bucketToBigQuery.launchLoadJobs(loadJobs);
+    console.log('sent load jobs');
   }
   if (events && events.length)
     await bucketToBigQuery.ackMessages(events);

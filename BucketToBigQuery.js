@@ -241,7 +241,7 @@ class BucketToBigQuery {
     if (!lines)
       return null;
     let firstLine = lines[0];
-    if (firstLine)
+    if (!firstLine)
       return null;
     let headers = _.map(firstLine.split(','), h => _.replace(h, /^"|"$/g, ''));
     return headers;
@@ -318,6 +318,35 @@ class BucketToBigQuery {
     let tasks = this.manifest.tasks;
 
     if (events && events.length) {
+      // decode event.message.data
+      events = _.filter(events,['message.attributes.eventType','OBJECT_FINALIZE']);
+      for (let event of events) {
+        //{
+        //   "kind": "storage#object",
+        //   "id": "bucket-to-bigquery-test-1/water/2019/09/2019-08-01_water_Lot3.csv/1567650351027743",
+        //   "selfLink": "https://www.googleapis.com/storage/v1/b/bucket-to-bigquery-test-1/o/water%2F2019%2F09%2F2019-08-01_water_Lot3.csv",
+        //   "name": "water/2019/09/2019-08-01_water_Lot3.csv",
+        //   "bucket": "bucket-to-bigquery-test-1",
+        //   "generation": "1567650351027743",
+        //   "metageneration": "1",
+        //   "contentType": "application/octet-stream",
+        //   "timeCreated": "2019-09-05T02:25:51.027Z",
+        //   "updated": "2019-09-05T02:25:51.027Z",
+        //   "storageClass": "STANDARD",
+        //   "timeStorageClassUpdated": "2019-09-05T02:25:51.027Z",
+        //   "size": "3475",
+        //   "md5Hash": "t2LC+s4EQP4u5VfRc2kAmw==",
+        //   "mediaLink": "https://www.googleapis.com/download/storage/v1/b/bucket-to-bigquery-test-1/o/water%2F2019%2F09%2F2019-08-01_water_Lot3.csv?generation=1567650351027743&alt=media",
+        //   "crc32c": "KIM0Hg==",
+        //   "etag": "CJ+suNLQuOQCEAE="
+        // }
+        let data = _.get(event,'message.data') || null;
+        if (data)
+          event.message.data = JSON.parse(Buffer.from(data, 'base64'));
+      }
+      events = _.filter(events,['message.data.kind','storage#object']);
+      events = _.uniqBy(events, 'message.data.selfLink');
+
       let jobId = `${this.manifest.jobIdPrefix}__${Math.random().toString().replace('0.','')}__${DateTime.utc().toFormat("yyyyMMdd'T'hhmmssSSS")}__`;
       for (let i = 0; i < tasks.length; i++) {
         let task = tasks[i];
@@ -327,36 +356,13 @@ class BucketToBigQuery {
           files: []
         };
         for (let event of events) {
-          //{
-          //   "kind": "storage#object",
-          //   "id": "bucket-to-bigquery-test-1/water/2019/09/2019-08-01_water_Lot3.csv/1567650351027743",
-          //   "selfLink": "https://www.googleapis.com/storage/v1/b/bucket-to-bigquery-test-1/o/water%2F2019%2F09%2F2019-08-01_water_Lot3.csv",
-          //   "name": "water/2019/09/2019-08-01_water_Lot3.csv",
-          //   "bucket": "bucket-to-bigquery-test-1",
-          //   "generation": "1567650351027743",
-          //   "metageneration": "1",
-          //   "contentType": "application/octet-stream",
-          //   "timeCreated": "2019-09-05T02:25:51.027Z",
-          //   "updated": "2019-09-05T02:25:51.027Z",
-          //   "storageClass": "STANDARD",
-          //   "timeStorageClassUpdated": "2019-09-05T02:25:51.027Z",
-          //   "size": "3475",
-          //   "md5Hash": "t2LC+s4EQP4u5VfRc2kAmw==",
-          //   "mediaLink": "https://www.googleapis.com/download/storage/v1/b/bucket-to-bigquery-test-1/o/water%2F2019%2F09%2F2019-08-01_water_Lot3.csv?generation=1567650351027743&alt=media",
-          //   "crc32c": "KIM0Hg==",
-          //   "etag": "CJ+suNLQuOQCEAE="
-          // }
-          let payload = (event.message.data && JSON.parse(Buffer.from(event.message.data, 'base64'))) || null;
-          if (!payload || payload.kind!="storage#object")
-            continue;
-          let {bucket,name} = payload;
+          let data = event.message.data;
+          let {bucket,name} = data;
           let uri = `gs://${bucket}/${name}`;
           let isMatch = _.some(task.sources, s => minimatch(uri, s));
           console.log(`Comparing ${uri}${isMatch && '         MATCH'}`)
-          if (!isMatch)
-            continue;
-          taskInfo.files.push(uri);
-          break;
+          if (isMatch)
+            taskInfo.files.push(uri);
         }
         taskInfos.push(taskInfo);
       }
@@ -471,7 +477,9 @@ class BucketToBigQuery {
 
   // async
   launchLoadJobs(loadJobs) {
-    return Promise.all(_.map(loadJobs,j=>this.bigQuery.createJob(j)));
+    return Promise.all(_.map(loadJobs,j=> {
+      return this.bigQuery.createJob(j);
+    }));
   }
 
   ackMessages(aMessages) {

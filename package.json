@@ -28,5 +28,8 @@
   },
   "engines": {
     "node": "8"
+  },
+  "scripts": {
+    "deploy": "gcloud functions deploy loadCreatedFiles --project bucket-to-bigquery --trigger-topic trigger_loadCreatedFiles --set-env-vars B2BQ_MANIFEST=gs://<mybucket>/manifest.json --runtime nodejs8 --memory 128MB --entry-point loadCreatedFiles"
   }
 }
