@@ -99,6 +99,13 @@ class BucketToBigQuery {
     }
   }
 
+  async ensureTable(aDataset,aTable,aDefinition) {
+    let table = this.bigQuery.dataset(aDataset).table(aTable);
+    let exists = (await table.exists())[0];
+    if (!exists)
+      await table.create(aDefinition);
+  }
+
   // Not working at present.
   // This works :
   // GOOGLE_APPLICATION_CREDENTIALS=/Users/gary/.credentials/bucket-to-bigquery-5de2d6358969.json gsutil notification create -t projects/bucket-to-bigquery/topics/watch-bucket -f json gs://bucket-to-bigquery-test-1
@@ -139,6 +146,7 @@ class BucketToBigQuery {
 
   async pullMessages(aMaxMessages = 100) {
     let results = [];
+    let zeros = 3;
     while (results.length < aMaxMessages) {
       let pullCount = aMaxMessages - results.length;
       let responses = await new Promise((resolve, reject) => {
@@ -150,8 +158,11 @@ class BucketToBigQuery {
       });
       responses = _(responses).compact().map(r => r.receivedMessages).flatten().value();
       console.log(`Pulled ${responses.length} actual responses`);
-      if (!responses.length)
-        break;
+      if (!responses.length) {
+        zeros -= 1;
+        if (!zeros)
+          break;
+      }
       results = _.concat(results,responses);
     }
     return results;
@@ -234,8 +245,7 @@ class BucketToBigQuery {
     // });
   }
 
-  async sniffCsvHeaders(aUri) {
-    let lines = await this.getLines(aUri);
+  async sniffCsvHeaders(lines) {
     if (!lines)
       return null;
     let firstLine = lines[0];
@@ -317,7 +327,7 @@ class BucketToBigQuery {
 
     if (events && events.length) {
       // decode event.message.data
-      events = _.filter(events,['message.attributes.eventType','OBJECT_FINALIZE']);
+      events = _.filter(events, ['message.attributes.eventType', 'OBJECT_FINALIZE']);
       for (let event of events) {
         //{
         //   "kind": "storage#object",
@@ -338,29 +348,29 @@ class BucketToBigQuery {
         //   "crc32c": "KIM0Hg==",
         //   "etag": "CJ+suNLQuOQCEAE="
         // }
-        let data = _.get(event,'message.data') || null;
+        let data = _.get(event, 'message.data') || null;
         if (data)
           event.message.data = JSON.parse(Buffer.from(data, 'base64'));
       }
-      events = _.filter(events,['message.data.kind','storage#object']);
+      events = _.filter(events, ['message.data.kind', 'storage#object']);
       events = _.uniqBy(events, 'message.data.selfLink');
 
       console.log(`Got ${events.length} unique storage finalize events`);
 
-      let jobId = `${this.manifest.jobIdPrefix}__${Math.random().toString().replace('0.','')}__${DateTime.utc().toFormat("yyyyMMdd'T'hhmmssSSS")}__`;
+      let jobId = `${this.manifest.jobIdPrefix}__${Math.random().toString().replace('0.', '')}__${DateTime.utc().toFormat("yyyyMMdd'T'hhmmssSSS")}__`;
       for (let i = 0; i < tasks.length; i++) {
         let task = tasks[i];
         let taskInfo = {
           task,
-          jobId: jobId+i.toString(),
+          jobId: jobId + i.toString(),
           files: []
         };
         for (let event of events) {
           let data = event.message.data;
-          let {bucket,name} = data;
+          let {bucket, name} = data;
           let uri = `gs://${bucket}/${name}`;
           let isMatch = _.some(task.sources, s => minimatch(uri, s));
-          console.log(`Comparing ${uri}${isMatch && '         MATCH'}`)
+          console.log(`Comparing ${uri}${isMatch && '         MATCH'}`);
           if (isMatch)
             taskInfo.files.push(uri);
         }
@@ -378,11 +388,11 @@ class BucketToBigQuery {
       let schema;
       let timePartitioningField;
 
-
       let firstFileHeaders = null;
       for (let f of taskInfo.files) {
         try {
-          if (firstFileHeaders = await this.sniffCsvHeaders(f))
+          let lines = await this.getLines(f);
+          if (firstFileHeaders = await this.sniffCsvHeaders(lines))
             break;
         } catch (e) {
           console.log(e);
@@ -395,7 +405,8 @@ class BucketToBigQuery {
       if (taskInfo.files.length > 1) {
         for (let i = taskInfo.files.length - 1; i >= 0; i--) {
           try {
-            if (lastFileHeaders = await this.sniffCsvHeaders(taskInfo.files[i]))
+            let lines = await this.getLines(taskInfo.files[i]);
+            if (lastFileHeaders = await this.sniffCsvHeaders(lines))
               break;
           } catch (e) {
             console.log(e);
@@ -443,6 +454,12 @@ class BucketToBigQuery {
           timePartitioningField = null;
         schema = {fields};
       }
+      let filesToLoad = taskInfo.files;
+      let filesImported = await this.checkFilesImported(taskInfo.task.dataset,taskInfo.task.table,filesToLoad);
+      console.log(`filesToLoad ${filesToLoad.length} already loaded ${filesImported.length}`);
+      filesToLoad = _.difference(filesToLoad,filesImported);
+      if (!filesToLoad.length)
+        continue;
 
       let jobValues = {
         jobId: taskInfo.jobId,
@@ -455,7 +472,7 @@ class BucketToBigQuery {
             allowQuotedNewlines: true,
             ignoreUnknownValues: true,
             maxBadRecords: 0,
-            sourceUris: taskInfo.files,
+            sourceUris: filesToLoad,
             destinationTable: {
               projectId: this.project,
               datasetId: taskInfo.task.dataset,
@@ -482,6 +499,15 @@ class BucketToBigQuery {
     }));
   }
 
+  async storeJobsFilesAsImported(loadJobs) {
+    for (let j of loadJobs) {
+      let load = _.get(j,'configuration.load');
+      if (!load)
+        continue;
+      await this.storeAsImported(load.destinationTable.datasetId,load.destinationTable.tableId,load.sourceUris);
+    }
+  }
+
   ackMessages(aMessages) {
     const ackIds = _.map(aMessages,m=>m.ackId);
     return this.subscriberClient.acknowledge({
@@ -490,6 +516,18 @@ class BucketToBigQuery {
     });
   }
 
+  async checkFilesImported(aDataset, aTable, aFiles) {
+    let files_s = _.map(aFiles,f=>`'${f}'`).join(',');
+    let results = await this.bigQuery.query(`SELECT DISTINCT uri FROM ${aDataset}.${aTable}_imported WHERE uri IN (${files_s})`);
+    return _.map(results[0],'uri');
+  }
+
+  async storeAsImported(aDataset, aTable, aFiles) {
+    let table = this.bigQuery.dataset(aDataset).table(`${aTable}_imported`);
+    let imported_at = DateTime.utc().toFormat('yyyy-MM-dd HH:mm:ss');
+    let rows = _.map(aFiles,f => ({imported_at, uri: f}));
+    await table.insert(rows);
+  }
 };
 
 module.exports = BucketToBigQuery;

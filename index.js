@@ -66,7 +66,7 @@ exports.loadCreatedFiles = async (event, context) => {
     events = context.mockEvents;
   } else {
     await bucketToBigQuery.ensureSubscription();
-    events = await bucketToBigQuery.pullMessages(9000); // the more the better for deduping reasons, but we can only load 1,000 jobs of 10,000 files per job
+    events = await bucketToBigQuery.pullMessages(process.env.DEBUG ? 3 : 1000); // the more the better for deduping reasons, but we can only load 1,000 jobs of 10,000 files per job
   }
   console.log(`Got ${events.length} notifications`);
   let taskInfos = bucketToBigQuery.getTriggeredTaskInfos(events);  // gets info of the tasks that have been triggered by a changing file
@@ -79,12 +79,19 @@ exports.loadCreatedFiles = async (event, context) => {
       console.log(`last file  : ${t.files[t.files.length-1]}`);
   }
   if (taskInfos && taskInfos.length) {
+
+    let tables = _.map(taskInfos,ti => ({dataset: ti.task.dataset, table: ti.task.table}));
+    for (let t of tables)
+      await bucketToBigQuery.ensureTable(t.dataset,`${t.table}_imported`,{schema: [{name: 'imported_at', type: 'timestamp'},{name: 'uri', type: 'string'}]});
+
     let loadJobs = await bucketToBigQuery.loadJobsFromTaskInfos(taskInfos);
+
     console.log(`Generated ${loadJobs && loadJobs.length} loadJobs`);
     if (process.env.DRY_RUN) {
       console.log(JSON.stringify(loadJobs));
     } else {
       await bucketToBigQuery.launchLoadJobs(loadJobs);
+      await bucketToBigQuery.storeJobsFilesAsImported(loadJobs);
       console.log('sent load jobs');
     }
   }
