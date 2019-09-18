@@ -2,6 +2,26 @@
 
 Deployment :
 
-* cloud function created with bucket-to-bigquery repository
-* environment variables B2BQ_MANIFEST=gs://<bucket>/<path>.json, ENTRY_POINT=loadCreatedFiles
+
+* Create bucket
+* Create watch-bucket topic
+* Set bucket notifications for the topic eg. : GOOGLE_APPLICATION_CREDENTIALS=/Users/gary/.credentials/bucket-to-bigquery-5de2d6358969.json gsutil notification create -t projects/bucket-to-bigquery/topics/watch-bucket -f json gs://bucket-to-bigquery-test-1
+* Create bucket-to-bigquery-trigger topic
+* Create <optional-custom-name>manifest.json file and upload to <project>.appspot.com bucket
+* Create cloud function with bucket-to-bigquery repository and environment variables B2BQ_MANIFEST=gs://<bucket>/<path>.json, ENTRY_POINT=loadCreatedFiles
+
+
+* Set up function to listen to bucket-to-bigquery-trigger topic
+* Create schedule to fire bucket-to-bigquery-trigger topic
+
+
+
+Dedupe with :
+
+select timestamp from test1.water where timestamp = TIMESTAMP('2019-09-05 03:00:00') AND lot = "Lot 1" LIMIT 1;
+
+
+View :
+
+select DATETIME(timestamp,CONCAT(IF(utc_offset>0,'+','-'),FORMAT_TIME("%R", TIME_ADD(TIME "00:00:00", INTERVAL CAST(ABS(ROUND(utc_offset*60)) AS INT64) MINUTE)))) as local_time,* except (timestamp,utc_offset) from `bucket-to-bigquery`.test1.water order by timestamp,lot
 

@@ -75,19 +75,6 @@ function likelyTimestamp(aName) {
 
 //const GS_URL_REGEXP = /^gs:\/\/([a-z0-9_.-]+)\/(.+)$/;
 
-/*
-
-Setup :
-
-* Create bucket
-* Create watch-bucket topic
-* Set bucket notifications for the topic eg. : GOOGLE_APPLICATION_CREDENTIALS=/Users/gary/.credentials/bucket-to-bigquery-5de2d6358969.json gsutil notification create -t projects/bucket-to-bigquery/topics/watch-bucket -f json gs://bucket-to-bigquery-test-1
-* Create bucket-to-bigquery-trigger topic
-* Set up function to listen to bucket-to-bigquery-trigger topic
-* Create schedule to fire bucket-to-bigquery-trigger topic
-
- */
-
 class BucketToBigQuery {
 
   constructor(aManifest) {
@@ -150,14 +137,27 @@ class BucketToBigQuery {
     return !!notification;
   }
 
-  async pullMessages(aMaxMessages = 10) {
-    const responses = await new Promise( (resolve, reject)=> {
-      this.subscriberClient.pull({
-        subscription: this.formattedSubscription,
-        maxMessages: aMaxMessages,
-        returnImmediately: true
-      }).then(resolve).catch(reject);
-    });
+  async pullMessages(aMaxMessages = 100) {
+    let results = [];
+    while (results.length < aMaxMessages) {
+      let pullCount = aMaxMessages - results.length;
+      let responses = await new Promise((resolve, reject) => {
+        this.subscriberClient.pull({
+          subscription: this.formattedSubscription,
+          maxMessages: pullCount,
+          returnImmediately: true
+        }).then(resolve).catch(reject);
+      });
+      responses = _(responses).compact().map(r => r.receivedMessages).flatten().value();
+      console.log(`Pulled ${responses.length} actual responses`);
+      if (!responses.length)
+        break;
+      results = _.concat(results,responses);
+    }
+    return results;
+  }
+
+
     //let message = responses[0].receivedMessages[0];
 
     // {
@@ -190,8 +190,6 @@ class BucketToBigQuery {
     //     "orderingKey": ""
     //   }
     // }
-    return _(responses).compact().map(r=>r.receivedMessages).flatten().value();
-  }
 
   // getBucketFile(aUri) {
   //   const parsed = GS_URL_REGEXP.exec(aUri);
@@ -346,6 +344,8 @@ class BucketToBigQuery {
       }
       events = _.filter(events,['message.data.kind','storage#object']);
       events = _.uniqBy(events, 'message.data.selfLink');
+
+      console.log(`Got ${events.length} unique storage finalize events`);
 
       let jobId = `${this.manifest.jobIdPrefix}__${Math.random().toString().replace('0.','')}__${DateTime.utc().toFormat("yyyyMMdd'T'hhmmssSSS")}__`;
       for (let i = 0; i < tasks.length; i++) {

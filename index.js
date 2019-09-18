@@ -14,9 +14,9 @@ const storage = new Storage(); //{projectId: this.project, keyFilename: this.key
  */
 exports.loadCreatedFiles = async (event, context) => {
 
-  console.log(JSON.stringify(process.env));
-  console.log(JSON.stringify(event));
-  console.log(JSON.stringify(context));
+  // console.log(JSON.stringify(process.env));
+  // console.log(JSON.stringify(event));
+  // console.log(JSON.stringify(context));
 
   let manifest;
   let manifest_uri = process.env.B2BQ_MANIFEST;
@@ -35,6 +35,8 @@ exports.loadCreatedFiles = async (event, context) => {
     auth.credentials = credentials;
     delete auth.keyFilename;
   }
+  if (Object.keys(manifest.authentication).length==0)
+    delete manifest.authentication;
 
   // let payload;
   // try {
@@ -46,6 +48,15 @@ exports.loadCreatedFiles = async (event, context) => {
   // console.log("stringified:" + (payload && JSON.stringify(payload)) || 'null');
 
   let bucketToBigQuery = new BucketToBigQuery(manifest);
+
+  // get client_email from storage
+  let client_email = _.get(bucketToBigQuery,'storage.authClient.jsonContent.client_email');
+  if (!client_email) {
+    let creds = await bucketToBigQuery.storage.authClient.getCredentials();
+    client_email = creds.client_email;
+  }
+
+  console.log(`Authenticating as ${client_email}`);
   // bucketToBigQuery.withMessages(10, (message) => {
   //   bucketToBigQuery.createLoadJobs(payload);
   // })
@@ -69,10 +80,17 @@ exports.loadCreatedFiles = async (event, context) => {
   }
   if (taskInfos && taskInfos.length) {
     let loadJobs = await bucketToBigQuery.loadJobsFromTaskInfos(taskInfos);
-    let responses = await bucketToBigQuery.launchLoadJobs(loadJobs);
-    console.log('sent load jobs');
+    console.log(`Generated ${loadJobs && loadJobs.length} loadJobs`);
+    if (process.env.DRY_RUN) {
+      console.log(JSON.stringify(loadJobs));
+    } else {
+      await bucketToBigQuery.launchLoadJobs(loadJobs);
+      console.log('sent load jobs');
+    }
   }
-  if (events && events.length)
+  if (events && events.length) {
+    console.log(`ACK ${events.length} messages`);
     await bucketToBigQuery.ackMessages(events);
-  console.log('done.');
+  }
+  console.log(`done.`);
 };
