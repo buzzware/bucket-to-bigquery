@@ -49,7 +49,7 @@ all, and eg. reports by day may include hours from previous or future days.
 
 ## Manifest Format
 
-```json
+```json5
 {
   "project": "<your Google Cloud Project Id>",
   "bucketNotificationTopic": "<a PubSub topic name for watching source buckets eg. 'watch-bucket'>",
