@@ -1,5 +1,3 @@
-//const MemoryStream = require("./utils/MemoryStream");
-
 const {Storage} = require('@google-cloud/storage');
 const PubSubPkg = require('@google-cloud/pubsub');
 const {BigQuery} = require('@google-cloud/bigquery');
@@ -10,48 +8,6 @@ const {DateTime} = require('luxon');
 const {ErrorControl,HttpErrors} = require('error-control');
 
 const GetStorageToBuffer = require('./commands/GetStorageToBuffer');
-
-// const stream = require('stream');
-// //var util = require('util');
-// // use Node.js Writable, otherwise load polyfill
-// const Writable = stream.Writable; // || require('readable-stream').Writable;
-
-// var memStore = { };
-//
-// /* Writable memory stream */
-// function WMStrm(key, options) {
-//   // allow use without new operator
-//   if (!(this instanceof WMStrm)) {
-//     return new WMStrm(key, options);
-//   }
-//   Writable.call(this, options); // init super
-//   this.key = key; // save key
-//   memStore[key] = new Buffer(''); // empty
-// }
-// util.inherits(WMStrm, Writable);
-
-// WMStrm.prototype._write = function (chunk, enc, cb) {
-//   // our memory store stores things in buffers
-//   var buffer = (Buffer.isBuffer(chunk)) ?
-//     chunk :  // already is Buffer use it
-//     new Buffer(chunk, enc);  // string, convert
-//
-//   // concat to the buffer already there
-//   memStore[this.key] = Buffer.concat([memStore[this.key], buffer]);
-//   cb();
-// };
-
-
-// Trying our stream out
-// var wstream = new WMStrm('foo');
-// wstream.on('finish', function () {
-//   console.log('finished writing');
-//   console.log('value is:', memStore.foo.toString());
-// });
-// wstream.write('hello ');
-// wstream.write('world');
-// wstream.end();
-
 
 function sameOrSuperSet(aListA, aListB) {
   if (_.isEqual(aListA,aListB))
@@ -73,15 +29,12 @@ function likelyTimestamp(aName) {
   return (name=='timestamp' || name=='createdat' || name=='time' || name=='date' || name=='datetime');
 }
 
-//const GS_URL_REGEXP = /^gs:\/\/([a-z0-9_.-]+)\/(.+)$/;
-
 class BucketToBigQuery {
 
   constructor(aManifest) {
     this.manifest = aManifest;
     let authentication = _.pick(aManifest.authentication,'keyFilename,credentials'.split(','));   // may contain keyFilename or credentials
     this.project = aManifest.project;
-    //this.keyFilename = aManifest.authentication.keyFilename;
     this.storage = new Storage(Object.assign({projectId: this.project},authentication));
     this.pubsub = new PubSub(Object.assign({projectId: this.project},authentication));
     this.bigQuery = new BigQuery(Object.assign({projectId: this.project},authentication));
@@ -108,7 +61,7 @@ class BucketToBigQuery {
 
   // Not working at present.
   // This works :
-  // GOOGLE_APPLICATION_CREDENTIALS=/Users/gary/.credentials/bucket-to-bigquery-5de2d6358969.json gsutil notification create -t projects/bucket-to-bigquery/topics/watch-bucket -f json gs://bucket-to-bigquery-test-1
+  // GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json gsutil notification create -t projects/<project>/topics/watch-bucket -f json gs://<bucket>
   // probably due to https://github.com/googleapis/google-cloud-php/issues/1079
   async ensureNotification(aBucket) {
     let bucket = await this.storage.bucket(aBucket);
@@ -124,7 +77,6 @@ class BucketToBigQuery {
     return notification;
   }
 
-  //const name = `projects/${this.credentials.projectId}/subscriptions/${aSimpleName}`;
   async ensureSubscription() {
     if (!this.subscription)
       this.subscription = this.topic.subscription(this.subscriptionName);
@@ -146,7 +98,7 @@ class BucketToBigQuery {
 
   async pullMessages(aMaxMessages = 100) {
     let results = [];
-    let zeros = 3;
+    let zeros = 5;    // stop when we have received this many empty responses
     while (results.length < aMaxMessages) {
       let pullCount = aMaxMessages - results.length;
       let responses = await new Promise((resolve, reject) => {
@@ -169,80 +121,12 @@ class BucketToBigQuery {
   }
 
 
-    //let message = responses[0].receivedMessages[0];
-
-    // {
-    //   "ackId": "BCEhPjA-RVNEUAYWLF1GSFE3GQhoUQ5PXiM_NSAoRRIHAU8CKF15MlUxQVoaB1ENGXJ8ZyY8DBBUAk1RfFVbEQ16bVxXOFYPHnN6aHdvXhUFA0FXfnfQ2sugjM7gNksxIfuhkK5fev2yv6ZiZho9XhJLLD5-LzlFQV5AEkwkDERJUytDCypYEU4",
-    //   "message": {
-    //     "attributes": {
-    //       "objectGeneration": "1567650351027743",
-    //       "eventTime": "2019-09-05T02:25:51.027455Z",
-    //       "eventType": "OBJECT_FINALIZE",
-    //       "payloadFormat": "JSON_API_V1",
-    //       "notificationConfig": "projects/_/buckets/bucket-to-bigquery-test-1/notificationConfigs/3",
-    //       "bucketId": "bucket-to-bigquery-test-1",
-    //       "objectId": "water/2019/09/2019-08-01_water_Lot3.csv"
-    //     },
-    //     "data": {
-    //       "type": "Buffer",
-    //       "data": [
-    //         123,
-    //         10,
-    //         32,
-    //         32,
-    //         10
-    //       ]
-    //     },
-    //     "messageId": "727179254641440",
-    //     "publishTime": {
-    //       "seconds": "1567650351",
-    //       "nanos": 228000000
-    //     },
-    //     "orderingKey": ""
-    //   }
-    // }
-
-  // getBucketFile(aUri) {
-  //   const parsed = GS_URL_REGEXP.exec(aUri);
-  //   if (!(parsed !== null && parsed.length === 3))
-  //     throw new Error('Invalid Uri. Should be gs://<bucket>/<file>');
-  //   return this.storage.bucket(parsed[1]).file(parsed[2]);
-  // }
-
   async getLines(aUri,aMaxBytes=4000) {
     let content = await GetStorageToBuffer.call(this.storage,aUri,aMaxBytes);
     if (!content)
       return null;
     let lines = content.toString().split(/(?:\r\n|\r|\n)/g);
     return lines;
-    // let file = this.getBucketFile(aUri);
-    // let exists = await file.exists();
-    // if (!exists[0])
-    //   return null;
-    // let memoryStream = new MemoryStream();
-    // return new Promise((resolve, reject) => {
-    //   try {
-    //     file.createReadStream({
-    //       start: 0,
-    //       end: aMaxBytes
-    //     })
-    //       .pipe(memoryStream)
-    //       .on('error', reject)
-    //       .on('close', () => console.log('close'))
-    //       .on('response', (response)=>{
-    //         console.log('response');
-    //       })
-    //       .on('finish', () => {
-    //         let s = memoryStream.buffer.toString();
-    //         let lines = s.split(/(?:\r\n|\r|\n)/g);
-    //         resolve(lines);
-    //       })
-    //       .on('finish',(e)=>console.log('finish'))
-    //       .on('unpipe',(e)=>console.log('unpipe'));
-    //   } catch(e) {
-    //     reject(e);
-    //   }
-    // });
   }
 
   async sniffCsvHeaders(lines) {
@@ -329,25 +213,6 @@ class BucketToBigQuery {
       // decode event.message.data
       events = _.filter(events, ['message.attributes.eventType', 'OBJECT_FINALIZE']);
       for (let event of events) {
-        //{
-        //   "kind": "storage#object",
-        //   "id": "bucket-to-bigquery-test-1/water/2019/09/2019-08-01_water_Lot3.csv/1567650351027743",
-        //   "selfLink": "https://www.googleapis.com/storage/v1/b/bucket-to-bigquery-test-1/o/water%2F2019%2F09%2F2019-08-01_water_Lot3.csv",
-        //   "name": "water/2019/09/2019-08-01_water_Lot3.csv",
-        //   "bucket": "bucket-to-bigquery-test-1",
-        //   "generation": "1567650351027743",
-        //   "metageneration": "1",
-        //   "contentType": "application/octet-stream",
-        //   "timeCreated": "2019-09-05T02:25:51.027Z",
-        //   "updated": "2019-09-05T02:25:51.027Z",
-        //   "storageClass": "STANDARD",
-        //   "timeStorageClassUpdated": "2019-09-05T02:25:51.027Z",
-        //   "size": "3475",
-        //   "md5Hash": "t2LC+s4EQP4u5VfRc2kAmw==",
-        //   "mediaLink": "https://www.googleapis.com/download/storage/v1/b/bucket-to-bigquery-test-1/o/water%2F2019%2F09%2F2019-08-01_water_Lot3.csv?generation=1567650351027743&alt=media",
-        //   "crc32c": "KIM0Hg==",
-        //   "etag": "CJ+suNLQuOQCEAE="
-        // }
         let data = _.get(event, 'message.data') || null;
         if (data)
           event.message.data = JSON.parse(Buffer.from(data, 'base64'));

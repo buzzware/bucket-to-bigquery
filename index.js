@@ -14,10 +14,6 @@ const storage = new Storage(); //{projectId: this.project, keyFilename: this.key
  */
 exports.loadCreatedFiles = async (event, context) => {
 
-  // console.log(JSON.stringify(process.env));
-  // console.log(JSON.stringify(event));
-  // console.log(JSON.stringify(context));
-
   let manifest;
   let manifest_uri = process.env.B2BQ_MANIFEST;
   if (!manifest_uri)
@@ -38,15 +34,6 @@ exports.loadCreatedFiles = async (event, context) => {
   if (Object.keys(manifest.authentication).length==0)
     delete manifest.authentication;
 
-  // let payload;
-  // try {
-  //   payload = (event.data && JSON.parse(Buffer.from(event.data, 'base64'))) || null;
-  // } catch (e) {
-  //   console.error(`Failed to decode data sent to this pubsub function. You must send a string like {"data":"eyJtZXNzYWdlIjogImhlbGxvIn0"} which decodes to {"message": "hello"}`);
-  //   throw e;
-  // }
-  // console.log("stringified:" + (payload && JSON.stringify(payload)) || 'null');
-
   let bucketToBigQuery = new BucketToBigQuery(manifest);
 
   // get client_email from storage
@@ -57,9 +44,6 @@ exports.loadCreatedFiles = async (event, context) => {
   }
 
   console.log(`Authenticating as ${client_email}`);
-  // bucketToBigQuery.withMessages(10, (message) => {
-  //   bucketToBigQuery.createLoadJobs(payload);
-  // })
 
   let events;
   if (context.mockEvents) {
