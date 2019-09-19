@@ -5,7 +5,8 @@
 This project implements a common pattern for handling time-series data streams on Google Cloud.
 This pattern was refined to achieve the following :
 * CSV files can be stored cheaply, downloaded, emailed and loaded into Excel for analysis by non-programmers
-* The CSV files must be compatible with BigQuery for loading via a load job
+* The CSV files must be compatible with BigQuery for loading via load jobs (free, as opposed to inserts) and eventual use in Data Studio
+* The table schema must auto-expand to receive new columns in the CSV data
 
 The pattern looks like this :
 
