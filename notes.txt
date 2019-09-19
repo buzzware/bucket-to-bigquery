@@ -25,3 +25,4 @@ View :
 
 select DATETIME(timestamp,CONCAT(IF(utc_offset>0,'+','-'),FORMAT_TIME("%R", TIME_ADD(TIME "00:00:00", INTERVAL CAST(ABS(ROUND(utc_offset*60)) AS INT64) MINUTE)))) as local_time,* except (timestamp,utc_offset) from `bucket-to-bigquery`.test1.water order by timestamp,lot
 
+delete from DATASET.TABLE where true;

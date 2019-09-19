@@ -4,13 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "deploy_first": "gcloud functions deploy loadCreatedFiles --project bucket-to-bigquery --trigger-topic trigger_loadCreatedFiles --set-env-vars B2BQ_MANIFEST=gs://<mybucket>/manifest.json --runtime nodejs8 --memory 128MB --entry-point loadCreatedFiles --source=.",
+    "deploy": "GOOGLE_APPLICATION_CREDENTIALS=<keyFilename> gcloud functions deploy <functionName> --source=."
   },
   "keywords": [],
   "author": "Gary McGhee",
   "license": "MIT",
   "dependencies": {
-    "@google-cloud/bigquery": "4.1.8",
+    "@google-cloud/bigquery": "4.2.1",
     "@google-cloud/storage": "3.2.1",
     "@google-cloud/pubsub": "0.31.1",
     "lodash": "4.17.15",
@@ -28,9 +29,5 @@
   },
   "engines": {
     "node": "8"
-  },
-  "scripts": {
-    "deploy_first": "gcloud functions deploy loadCreatedFiles --project bucket-to-bigquery --trigger-topic trigger_loadCreatedFiles --set-env-vars B2BQ_MANIFEST=gs://<mybucket>/manifest.json --runtime nodejs8 --memory 128MB --entry-point loadCreatedFiles",
-    "deploy": "GOOGLE_APPLICATION_CREDENTIALS=<keyFilename> gcloud functions deploy <functionName>"
   }
 }
