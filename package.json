@@ -8,7 +8,7 @@
     "deploy": "GOOGLE_APPLICATION_CREDENTIALS=<keyFilename> gcloud functions deploy <functionName> --source=."
   },
   "keywords": [],
-  "author": "Gary McGhee",
+  "author": "Gary McGhee, Buzzware Solutions",
   "license": "MIT",
   "dependencies": {
     "@google-cloud/bigquery": "4.2.1",
