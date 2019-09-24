@@ -328,7 +328,7 @@ class BucketToBigQuery {
 
       let jobValues = {
         jobId: taskInfo.jobId,
-        location: 'US',
+        location: taskInfo.task.location || 'US',
         configuration: {
           load: {
             sourceFormat: 'CSV',

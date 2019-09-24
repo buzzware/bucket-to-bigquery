@@ -89,9 +89,18 @@ all, and eg. reports by day may include hours from previous or future days.
 ## Deployment
 * Create bucket
 * Create watch-bucket topic
-* Set bucket notifications for the topic eg. : GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json gsutil notification create -t projects/<project>/topics/watch-bucket -f json gs://<bucket>
-* Create bucket-to-bigquery-trigger topic
+* Set bucket notifications for the topic eg. : 
+```
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json gsutil notification create -t projects/<project>/topics/watch-bucket -f json gs://<bucket>
+```
+You can check notifications using 
+```
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json gsutil notification list gs://<bucket>
+```
+
 * Create <optional-custom-name>manifest.json file and upload to <project>.appspot.com bucket
-* Create cloud function with bucket-to-bigquery repository and environment variables B2BQ_MANIFEST=gs://<project>.appspot.com/<path>.json, ENTRY_POINT=loadCreatedFiles
-* Set up function to listen to bucket-to-bigquery-trigger topic
-* Create schedule to fire bucket-to-bigquery-trigger topic with an empty payload
+* Create cloud function with bucket-to-bigquery repository. From bucket-to-bigquery directory: 
+```
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json gcloud functions deploy loadCreatedFiles --project <project> --trigger-topic trigger_loadCreatedFiles --set-env-vars B2BQ_MANIFEST=gs://<bucket>/manifest.json --runtime nodejs8 --memory 128MB --entry-point loadCreatedFiles --source=.
+```
+* Create schedule to fire trigger_loadCreatedFiles topic with an empty payload

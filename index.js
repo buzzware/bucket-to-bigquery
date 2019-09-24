@@ -74,6 +74,10 @@ exports.loadCreatedFiles = async (event, context) => {
     if (process.env.DRY_RUN) {
       console.log(JSON.stringify(loadJobs));
     } else {
+      // for (let j of loadJobs) {
+      //   let loadConfig = j.configuration.load;
+      //   await bucketToBigQuery.ensureTable(loadConfig.destinationTable.datasetId, loadConfig.destinationTable.tableId, {schema: loadConfig.schema});
+      // }
       await bucketToBigQuery.launchLoadJobs(loadJobs);
       await bucketToBigQuery.storeJobsFilesAsImported(loadJobs);
       console.log('sent load jobs');
