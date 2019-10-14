@@ -11,6 +11,13 @@ class GetStorageToBuffer {
     return storage.bucket(parsed[1]).file(parsed[2]);
   }
 
+  static getBucketFiles(storage, aUri) {
+    const parsed = GS_URL_REGEXP.exec(aUri);
+    if (!(parsed !== null && parsed.length === 3))
+      throw new Error('Invalid Uri. Should be gs://<bucket>/<file>');
+    return storage.bucket(parsed[1]).getFiles({prefix: parsed[2]});
+  }
+
   static async call(storage, aUri, aMaxBytes = 4000) {
     let file = this.getBucketFile(storage, aUri);
     let exists = await file.exists();

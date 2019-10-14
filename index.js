@@ -54,35 +54,9 @@ exports.loadCreatedFiles = async (event, context) => {
   }
   console.log(`Got ${events.length} notifications`);
   let taskInfos = bucketToBigQuery.getTriggeredTaskInfos(events);  // gets info of the tasks that have been triggered by a changing file
-  for (let t of taskInfos) {
-    console.log(`jobId ${t.jobId}`);
-    console.log(`dataset: ${t.task.dataset} table: ${t.task.table}`);
-    console.log(`${t.files.length} files`);
-    console.log(`first file : ${t.files[0]}`);
-    if (t.files.length>1)
-      console.log(`last file  : ${t.files[t.files.length-1]}`);
-  }
-  if (taskInfos && taskInfos.length) {
 
-    let tables = _.map(taskInfos,ti => ({dataset: ti.task.dataset, table: ti.task.table}));
-    for (let t of tables)
-      await bucketToBigQuery.ensureTable(t.dataset,`${t.table}_imported`,{schema: [{name: 'imported_at', type: 'timestamp'},{name: 'uri', type: 'string'}]});
+  await this.launchLoadJobsFromTaskInfos(taskInfos,{dryRun: !!process.env.DRY_RUN});
 
-    let loadJobs = await bucketToBigQuery.loadJobsFromTaskInfos(taskInfos);
-
-    console.log(`Generated ${loadJobs && loadJobs.length} loadJobs`);
-    if (process.env.DRY_RUN) {
-      console.log(JSON.stringify(loadJobs));
-    } else {
-      // for (let j of loadJobs) {
-      //   let loadConfig = j.configuration.load;
-      //   await bucketToBigQuery.ensureTable(loadConfig.destinationTable.datasetId, loadConfig.destinationTable.tableId, {schema: loadConfig.schema});
-      // }
-      await bucketToBigQuery.launchLoadJobs(loadJobs);
-      await bucketToBigQuery.storeJobsFilesAsImported(loadJobs);
-      console.log('sent load jobs');
-    }
-  }
   if (events && events.length) {
     console.log(`ACK ${events.length} messages`);
     await bucketToBigQuery.ackMessages(events);

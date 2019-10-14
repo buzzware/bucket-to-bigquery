@@ -36,13 +36,15 @@ class BucketToBigQuery {
     let authentication = _.pick(aManifest.authentication,'keyFilename,credentials'.split(','));   // may contain keyFilename or credentials
     this.project = aManifest.project;
     this.storage = new Storage(Object.assign({projectId: this.project},authentication));
-    this.pubsub = new PubSub(Object.assign({projectId: this.project},authentication));
     this.bigQuery = new BigQuery(Object.assign({projectId: this.project},authentication));
-    this.subscriberClient = new PubSubPkg.v1.SubscriberClient(Object.assign({projectId: this.project},authentication));
-    this.topicName = aManifest.bucketNotificationTopic;
-    this.topic = this.pubsub.topic(this.topicName);
-    this.subscriptionName = `${this.topicName}__BucketToBigQuery`;
-    this.formattedSubscription = this.subscriberClient.subscriptionPath(this.project,this.subscriptionName);
+    if (aManifest.bucketNotificationTopic) {
+      this.pubsub = new PubSub(Object.assign({projectId: this.project},authentication));
+      this.subscriberClient = new PubSubPkg.v1.SubscriberClient(Object.assign({projectId: this.project},authentication));
+      this.topicName = aManifest.bucketNotificationTopic;
+      this.topic = this.pubsub.topic(this.topicName);
+      this.subscriptionName = `${this.topicName}__BucketToBigQuery`;
+      this.formattedSubscription = this.subscriberClient.subscriptionPath(this.project, this.subscriptionName);
+    }
   }
 
   async ensureTopicExists() {
@@ -235,7 +237,7 @@ class BucketToBigQuery {
           let {bucket, name} = data;
           let uri = `gs://${bucket}/${name}`;
           let isMatch = _.some(task.sources, s => minimatch(uri, s));
-          console.log(`Comparing ${uri}${isMatch && '         MATCH'}`);
+          //console.log(`Comparing ${uri}${isMatch && '         MATCH'}`);
           if (isMatch)
             taskInfo.files.push(uri);
         }
@@ -243,6 +245,53 @@ class BucketToBigQuery {
       }
     }
     return taskInfos;
+  }
+
+  async listBucketFileUris(aStoragePath) {
+    let response = await GetStorageToBuffer.getBucketFiles(this.storage, aStoragePath);
+    let names = _(response[0]).map(o=>`gs://${o.metadata.bucket}/${o.metadata.name}`).reject(n=>_.endsWith(n,'/')).value();
+    return names;
+  }
+
+  taskInfosForUris(uris) {
+    let taskInfos = [];
+    let tasks = this.manifest.tasks;
+
+    if (uris && uris.length) {
+      // decode event.message.data
+      // files = _.filter(files, ['message.attributes.eventType', 'OBJECT_FINALIZE']);
+      // for (let event of files) {
+      //   let data = _.get(event, 'message.data') || null;
+      //   if (data)
+      //     event.message.data = JSON.parse(Buffer.from(data, 'base64'));
+      // }
+      // files = _.filter(files, ['message.data.kind', 'storage#object']);
+      // files = _.uniqBy(files, 'message.data.selfLink');
+      //
+      // console.log(`Got ${files.length} unique storage finalize events`);
+
+      let jobId = `${this.manifest.jobIdPrefix}__${Math.random().toString().replace('0.', '')}__${DateTime.utc().toFormat("yyyyMMdd'T'hhmmssSSS")}__`;
+      for (let i = 0; i < tasks.length; i++) {
+        let task = tasks[i];
+        let taskInfo = {
+          task,
+          jobId: jobId + i.toString(),
+          files: []
+        };
+        for (let uri of uris) {
+          // let data = file.message.data;
+          // let {bucket, name} = data;
+          // let uri = `gs://${bucket}/${name}`;
+          let isMatch = _.some(task.sources, s => minimatch(uri, s));
+          //console.log(`Comparing ${uri}${isMatch && '         MATCH'}`);
+          if (isMatch)
+            taskInfo.files.push(uri);
+        }
+        taskInfos.push(taskInfo);
+      }
+    }
+    return taskInfos;
+
   }
 
   async loadJobsFromTaskInfos(aTaskInfos) {
@@ -370,6 +419,38 @@ class BucketToBigQuery {
       if (!load)
         continue;
       await this.storeAsImported(load.destinationTable.datasetId,load.destinationTable.tableId,load.sourceUris);
+    }
+  }
+
+  async launchLoadJobsFromTaskInfos(taskInfos,options={}) {
+    for (let t of taskInfos) {
+      console.log(`jobId ${t.jobId}`);
+      console.log(`dataset: ${t.task.dataset} table: ${t.task.table}`);
+      console.log(`${t.files.length} files`);
+      console.log(`first file : ${t.files[0]}`);
+      if (t.files.length>1)
+        console.log(`last file  : ${t.files[t.files.length-1]}`);
+    }
+    if (taskInfos && taskInfos.length) {
+
+      let tables = _.map(taskInfos,ti => ({dataset: ti.task.dataset, table: ti.task.table}));
+      for (let t of tables)
+        await this.ensureTable(t.dataset,`${t.table}_imported`,{schema: [{name: 'imported_at', type: 'timestamp'},{name: 'uri', type: 'string'}]});
+
+      let loadJobs = await this.loadJobsFromTaskInfos(taskInfos);
+
+      console.log(`Generated ${loadJobs && loadJobs.length} loadJobs`);
+      if (options.dryRun) {
+        console.log(JSON.stringify(loadJobs));
+      } else {
+        // for (let j of loadJobs) {
+        //   let loadConfig = j.configuration.load;
+        //   await bucketToBigQuery.ensureTable(loadConfig.destinationTable.datasetId, loadConfig.destinationTable.tableId, {schema: loadConfig.schema});
+        // }
+        await this.launchLoadJobs(loadJobs);
+        await this.storeJobsFilesAsImported(loadJobs);
+        console.log('sent load jobs');
+      }
     }
   }
 

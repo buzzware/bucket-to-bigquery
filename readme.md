@@ -63,6 +63,7 @@ all, and eg. reports by day may include hours from previous or future days.
       "sources": [  // a list of file path patterns to load into the given table
         "gs://<bucket>/<folder>/**/*.csv"
       ],
+      "location": "<location>",   // eg. australia-southeast1. This does need to match the location of the BigQuery dataset, not sure about the source bucket
       "dataset": "<dataset>",
       "table": "<table>",
       "timePartitioningField": "timestamp",     
