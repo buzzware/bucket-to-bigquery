@@ -13,7 +13,7 @@ const storage = new Storage(); //{projectId: this.project, keyFilename: this.key
  * @param {!Object} context Metadata for the event.
  */
 exports.loadCreatedFiles = async (event, context) => {
-
+  console.log(`METRIC B2BQ.LOAD_CREATED_FILES_BEGIN:`);
   let manifest;
   let manifest_uri = process.env.B2BQ_MANIFEST;
   if (!manifest_uri)
@@ -52,16 +52,20 @@ exports.loadCreatedFiles = async (event, context) => {
     await bucketToBigQuery.ensureSubscription();
     events = await bucketToBigQuery.pullMessages(process.env.DEBUG ? 3 : 1000); // the more the better for deduping reasons, but we can only load 1,000 jobs of 10,000 files per job
   }
-  console.log(`Got ${events.length} notifications`);
+  console.log(`METRIC B2BQ.NOTIFICATIONS: ${events.length}`);
+
   let taskInfos = bucketToBigQuery.getTriggeredTaskInfos(events);  // gets info of the tasks that have been triggered by a changing file
-  for (let t of taskInfos) {
-    console.log(`jobId ${t.jobId}`);
-    console.log(`dataset: ${t.task.dataset} table: ${t.task.table}`);
-    console.log(`${t.files.length} files`);
-    console.log(`first file : ${t.files[0]}`);
-    if (t.files.length>1)
-      console.log(`last file  : ${t.files[t.files.length-1]}`);
-  }
+
+  console.log(`METRIC B2BQ.TRIGGERED_TASK_INFOS: ${taskInfos.length}`);
+
+  // for (let t of taskInfos) {
+  //   console.log(`jobId ${t.jobId}`);
+  //   console.log(`dataset: ${t.task.dataset} table: ${t.task.table}`);
+  //   console.log(`${t.files.length} files`);
+  //   console.log(`first file : ${t.files[0]}`);
+  //   if (t.files.length>1)
+  //     console.log(`last file  : ${t.files[t.files.length-1]}`);
+  // }
   if (taskInfos && taskInfos.length) {
 
     let tables = _.map(taskInfos,ti => ({dataset: ti.task.dataset, table: ti.task.table}));
@@ -70,7 +74,8 @@ exports.loadCreatedFiles = async (event, context) => {
 
     let loadJobs = await bucketToBigQuery.loadJobsFromTaskInfos(taskInfos);
 
-    console.log(`Generated ${loadJobs && loadJobs.length} loadJobs`);
+    console.log(`METRIC B2BQ.GENERATED_LOAD_JOBS: ${loadJobs.length}`);
+
     if (process.env.DRY_RUN) {
       console.log(JSON.stringify(loadJobs));
     } else {
@@ -78,14 +83,17 @@ exports.loadCreatedFiles = async (event, context) => {
       //   let loadConfig = j.configuration.load;
       //   await bucketToBigQuery.ensureTable(loadConfig.destinationTable.datasetId, loadConfig.destinationTable.tableId, {schema: loadConfig.schema});
       // }
-      await bucketToBigQuery.launchLoadJobs(loadJobs);
-      await bucketToBigQuery.storeJobsFilesAsImported(loadJobs);
-      console.log('sent load jobs');
+      if (loadJobs && loadJobs.length) {
+        console.log(`METRIC B2BQ.LAUNCH_LOAD_JOBS_BEGIN: ${loadJobs.length}`);
+        await bucketToBigQuery.launchLoadJobs(loadJobs);
+        await bucketToBigQuery.storeJobsFilesAsImported(loadJobs);
+        console.log(`METRIC B2BQ.LAUNCH_LOAD_JOBS_END: ${loadJobs.length}`);
+      }
     }
   }
   if (events && events.length) {
-    console.log(`ACK ${events.length} messages`);
+    console.log(`METRIC B2BQ.ACK_MESSAGES: ${events.length}`);
     await bucketToBigQuery.ackMessages(events);
   }
-  console.log(`done.`);
+  console.log(`METRIC B2BQ.LOAD_CREATED_FILES_END:`);
 };

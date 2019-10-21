@@ -220,7 +220,7 @@ class BucketToBigQuery {
       events = _.filter(events, ['message.data.kind', 'storage#object']);
       events = _.uniqBy(events, 'message.data.selfLink');
 
-      console.log(`Got ${events.length} unique storage finalize events`);
+      console.log(`METRIC B2BQ.FINALIZE_NOTIFICATIONS: ${events.length}`);
 
       let jobId = `${this.manifest.jobIdPrefix}__${Math.random().toString().replace('0.', '')}__${DateTime.utc().toFormat("yyyyMMdd'T'hhmmssSSS")}__`;
       for (let i = 0; i < tasks.length; i++) {
@@ -388,6 +388,8 @@ class BucketToBigQuery {
   }
 
   async storeAsImported(aDataset, aTable, aFiles) {
+    for (let f of aFiles)
+      console.log(`METRIC B2BQ.STORE_AS_IMPORTED: ${f}`);
     let table = this.bigQuery.dataset(aDataset).table(`${aTable}_imported`);
     let imported_at = DateTime.utc().toFormat('yyyy-MM-dd HH:mm:ss');
     let rows = _.map(aFiles,f => ({imported_at, uri: f}));
