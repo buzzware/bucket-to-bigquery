@@ -109,7 +109,7 @@ class BucketToBigQuery {
         }).then(resolve).catch(reject);
       });
       responses = _(responses).compact().map(r => r.receivedMessages).flatten().value();
-      console.log(`Pulled ${responses.length} actual responses`);
+      //console.log(`Pulled ${responses.length} actual responses`);
       if (!responses.length) {
         zeros -= 1;
         if (!zeros)
@@ -235,7 +235,7 @@ class BucketToBigQuery {
           let {bucket, name} = data;
           let uri = `gs://${bucket}/${name}`;
           let isMatch = _.some(task.sources, s => minimatch(uri, s));
-          console.log(`Comparing ${uri}${isMatch && '         MATCH'}`);
+          //console.log(`Comparing ${uri}${isMatch && '         MATCH'}`);
           if (isMatch)
             taskInfo.files.push(uri);
         }
