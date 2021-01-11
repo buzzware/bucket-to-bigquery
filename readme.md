@@ -88,8 +88,7 @@ all, and eg. reports by day may include hours from previous or future days.
 
 ## Deployment
 * Create bucket
-* Create watch-bucket topic
-* Set bucket notifications for the topic eg. : 
+* Create watch-bucket topic with bucket notifications for the topic eg. : 
 ```
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json gsutil notification create -t projects/<project>/topics/watch-bucket -f json gs://<bucket>
 ```

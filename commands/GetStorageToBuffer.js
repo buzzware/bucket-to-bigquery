@@ -11,7 +11,7 @@ class GetStorageToBuffer {
     return storage.bucket(parsed[1]).file(parsed[2]);
   }
 
-  static async call(storage, aUri, aMaxBytes = 4000) {
+  static async call(storage, aUri, aMaxBytes = 1024*1024) {
     let file = this.getBucketFile(storage, aUri);
     let exists = await file.exists();
     if (!exists[0])
