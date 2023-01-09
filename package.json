@@ -17,7 +17,7 @@
     "lodash": "4.17.15",
     "fs-extra": "8.1.0",
     "minimatch": "3.0.4",
-    "luxon": "1.17.2",
+    "luxon": "1.28.1",
     "error-control": "0.2.5",
     "express": "4.17.1"
   },
